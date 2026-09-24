@@ -16,9 +16,9 @@ In the agent constructor, randomly assign `spin` to 0 or 1 using NumPy's global 
 
 For fish $i=1,\ldots,N$, let
 
-$$
+```math
 x_i\in\{0,1\},
-$$
+```
 
 where 0 means baseline and 1 means escaping. Store $x_i$ in `Agent.spin`. Let $r_i$ be the nonnegative integer stored in `Agent.recovery_timer`. Maintain the following invariant throughout the initialized simulation: baseline fish have zero timers and escaping fish have positive timers.
 
@@ -48,7 +48,7 @@ Create the time array containing $t=0,\ldots,T-1$. Evaluate the square-wave func
 ```math
 s_t=
 \begin{cases}
- s_0,&t_{\mathrm{start}}\leq t<t_{\mathrm{start}}+d_s,\\
+ s_0,&t_{\mathrm{start}}\leq t\lt t_{\mathrm{start}}+d_s,\\
  0,&\text{otherwise}.
 \end{cases}
 ```
@@ -61,28 +61,26 @@ Allocate `state_history` as an $N\times T$ array of 8-bit integers. Rows represe
 
 The activity is the fraction of fish escaping:
 
-$$
+```math
 a=\frac{1}{N}\sum_{i=1}^{N}x_i.
-$$
+```
 
 For a baseline fish at its update turn, compute the effective field
 
-$$
+```math
 h_i=s_t+Ja_i-\theta,
-$$
+```
 
 where $a_i$ is the activity immediately before that fish's turn. The fish share the same parameters; their fields can differ within a step because earlier fish may have activated.
 
 Use 0/1 activity for the social term. Each escaping fish contributes $J/N$ to the field, while each baseline fish contributes zero. Thus, even one escaping fish provides positive social input when $J>0$; a majority is not required.
 
-For comparison, if signed spins are defined as $\sigma_i=2x_i-1$, their mean is $m=2a-1$. The equivalent field is $s_t+J(m+1)/2-\theta$. Substituting $m$ directly for $a$ would change the model.
-
 Activate a baseline fish with probability
 
-$$
+```math
 p_i=P(x_i:0\rightarrow1\mid h_i)
 =\frac{1}{1+\exp(-\beta h_i)}.
-$$
+```
 
 Draw one independent uniform number $u_i\in[0,1)$ from the simulation generator. If $u_i<p_i$, set the fish's state to 1 and its recovery timer to $d_E$. Otherwise leave it at baseline with timer zero. This is a probability per visit, with no extra time-step multiplier.
 
@@ -90,10 +88,10 @@ For positive $\beta$, positive fields favor activation and negative fields suppr
 
 Finite noise allows spontaneous escapes. With no stimulus and no escaping neighbors, the supplied parameters give
 
-$$
+```math
 p_0=\frac{1}{1+\exp(\beta\theta)}
 =\frac{1}{1+\exp(4)}\approx0.018
-$$
+```
 
 per baseline fish per step. Evaluate the exponential directly in the activation formula.
 
@@ -101,17 +99,17 @@ per baseline fish per step. Evaluate the exponential directly in the activation 
 
 Glauber dynamics uses stochastic single-site updates of a spin system. In its heat-bath form, a site's state is selected according to its local conditional probability. For a binary state with local energy difference
 
-$$
+```math
 \Delta E_i=E_i(1)-E_i(0)=-h_i,
-$$
+```
 
 the probability of selecting the active state is
 
-$$
+```math
 P(x_i=1\mid\text{other states})
 =\frac{1}{1+\exp(\beta\Delta E_i)}
 =\frac{1}{1+\exp(-\beta h_i)}.
-$$
+```
 
 Use this logistic form for baseline-to-escape activation. A conventional signed spin with local energy $-H_i\sigma_i$ instead has an energy difference of $-2H_i$, producing an exponent $-2\beta H_i$. Use the binary-state convention above, with exponent $-\beta h_i$ and no factor of two.
 
@@ -136,40 +134,40 @@ Perform activation as a random sequential sweep within each discrete time step, 
 
 Let $x_i^{(t)}$ and $r_i^{(t)}$ be the state and timer before update $t$. Define
 
-$$
+```math
 E_t=\{i:x_i^{(t)}=1\},\qquad
 B_t=\{i:x_i^{(t)}=0\}.
-$$
+```
 
 For a random permutation $\pi_1,\ldots,\pi_{|B_t|}$ of the baseline fish, start with $A_0=|E_t|$. At visit $k$, compute
 
-$$
+```math
 a_k=\frac{A_{k-1}}{N},\qquad
 h_k=s_t+Ja_k-\theta,\qquad
 p_k=\frac{1}{1+\exp(-\beta h_k)},
-$$
+```
 
-$$
-z_k=\mathbf{1}\{u_k<p_k\},\qquad A_k=A_{k-1}+z_k.
-$$
+```math
+z_k=\mathbf{1}[u_k\lt p_k],\qquad A_k=A_{k-1}+z_k.
+```
 
-The complete state and timer updates are
+Here $\mathbf{1}[C]$ is 1 when condition $C$ is true and 0 otherwise. The complete state and timer updates are
 
-$$
+```math
 x_i^{(t+1)}=
 \begin{cases}
  z_k,&i=\pi_k\in B_t,\\
- \mathbf{1}\{r_i^{(t)}>1\},&i\in E_t,
+ \mathbf{1}[r_i^{(t)}\gt 1],&i\in E_t,
 \end{cases}
-$$
+```
 
-$$
+```math
 r_i^{(t+1)}=
 \begin{cases}
  d_Ez_k,&i=\pi_k\in B_t,\\
  r_i^{(t)}-1,&i\in E_t.
 \end{cases}
-$$
+```
 
 ### Recovery timing example
 
@@ -179,11 +177,11 @@ Make recovered fish eligible again on the following step, without an additional 
 
 ## 6. Record and visualize the result
 
-After each complete update, including recovery, record
+Let $H_{i,t}$ denote the entry at row $i$, column $t$ of `state_history`. After each complete update, including recovery, record
 
-$$
-\texttt{state\_history}[i,t]=x_i^{(t+1)}.
-$$
+```math
+H_{i,t}=x_i^{(t+1)}.
+```
 
 Store the outcome of update 0 in column 0 and retain exactly $T$ post-update columns. Retain the time and stimulus arrays and leave the final states and recovery timers on the agents after the run.
 
@@ -191,17 +189,9 @@ Create a Matplotlib figure of size 12 by 5 inches with constrained layout. Draw 
 
 For interpretation, define the escape-fraction trajectory as
 
-$$
+```math
 f_{\mathrm{escape}}[t]
-=\frac{1}{N}\sum_i\texttt{state\_history}[i,t].
-$$
+=\frac{1}{N}\sum_iH_{i,t}.
+```
 
 This equals activity at the end of each step. Use the state raster as the required visualization; a separate calculation or plot of population summaries is not required.
-
-## 7. Check behavior and reproducibility
-
-Arrange the cells so that executing them in order resets the generator, agents, and arrays before a fresh trial. To start another trial, rerun initialization and history allocation before the simulation loop.
-
-Check that the history has shape $(20,100)$ and contains only 0 and 1, and that the pulse is nonzero only at steps 10 and 11. Confirm that new escapes affect later visits immediately, that only previously escaping agents have their timers decremented, and that a recovering fish cannot reactivate in the same step. Repeating a complete run with the same seed in the same software environment should reproduce the trajectory.
-
-Deliver a notebook that runs one trial from an all-baseline school, applies the pulse to every fish, and produces one state raster. Keep the scope to this population-level model; spatial interactions, seeded escaping minorities, repeated-trial statistics, and parameter sweeps are not required.
