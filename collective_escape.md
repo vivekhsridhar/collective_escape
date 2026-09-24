@@ -33,27 +33,27 @@ Define the following parameters in a notebook cell, using these default values:
 | Variable | Symbol | Value | Meaning |
 | --- | --- | --- | --- |
 | `n_fish` | $N$ | 20 | Number of fish |
-| `total_timesteps` | $T$ | 100 | Number of updates and recorded columns |
+| `total_timesteps` | $L$ | 200 | Number of updates and recorded columns |
 | `random_seed` | — | 2026 | Simulation random seed |
-| `J` | $J$ | 3.0 | Social coupling strength |
-| `beta` | $\beta$ | 24.0 | Inverse noise parameter |
+| `J` | $J$ | 1.0 | Social coupling strength |
+| `T` | $T$ | 0.1 | Noise temperature |
 | `threshold` | $\theta$ | 0.5 | Common activation threshold |
-| `escape_duration` | $d_E$ | 6 | Number of steps spent escaping |
-| `refractory_duration` | $d_R$ | 12 | Full steps blocked after recovery |
+| `escape_duration` | $d_E$ | 5 | Number of steps spent escaping |
+| `refractory_duration` | $d_R$ | 10 | Full steps blocked after recovery |
 | `stimulus_start` | $t_{\mathrm{start}}$ | 10 | First stimulus step |
 | `stimulus_strength` | $s_0$ | 1 | Pulse amplitude |
-| `n_exposed` | $n$ | 3 | Number of fish directly exposed to the pulse |
-| `stimulus_duration` | $d_s$ | 2 | Pulse duration |
+| `n_exposed` | $n$ | 5 | Number of fish directly exposed to the pulse |
+| `stimulus_duration` | $d_s$ | 5 | Pulse duration |
 
-Treat all parameters as dimensionless and express durations in integer update steps. Use positive integers for population size, simulation length, and escape duration. Validate that `refractory_duration` is a nonnegative integer; zero disables the additional refractory period.
+Treat all parameters as dimensionless and express durations in integer update steps. Use positive integers for population size, simulation length, and escape duration. Use a nonnegative integer for `refractory_duration`; zero disables the additional refractory period. Use a positive temperature $T$ and reserve $L$ for the simulation length.
 
 ## 3. Initialize the simulation
 
 Create one NumPy random generator using `default_rng` with `random_seed`. Use this generator for every update permutation and activation draw. Construct an array of $N$ agents, then set every agent's `spin` to zero. Initialize their recovery and refractory timers to zero through the constructor, so every fish starts eligible for activation.
 
-Validate that `n_exposed` is an integer between 0 and $N$, inclusive. Using the simulation generator, select exactly `n_exposed` distinct fish uniformly without replacement. Store this selection in a Boolean array named `exposed` and keep it fixed throughout the run. Let $e_i=1$ for selected fish and $e_i=0$ for all others. Use this same generator for subsequent update permutations and activation draws. A value of 0 gives a no-direct-exposure control; a value of $N$ exposes the whole school.
+Choose an integer `n_exposed` between 0 and $N$, inclusive. Using the simulation generator, select exactly `n_exposed` distinct fish uniformly without replacement. Store this selection in a Boolean array named `exposed` and keep it fixed throughout the run. Let $e_i=1$ for selected fish and $e_i=0$ for all others. Use this same generator for subsequent update permutations and activation draws. A value of 0 gives a no-direct-exposure control; a value of $N$ exposes the whole school.
 
-Create the time array containing $t=0,\ldots,T-1$. Evaluate the square-wave function on time shifted by `stimulus_start`, giving
+Create the time array containing $t=0,\ldots,L-1$. Evaluate the square-wave function on time shifted by `stimulus_start`, giving
 
 ```math
 s_t=
@@ -63,9 +63,9 @@ s_t=
 \end{cases}
 ```
 
-With the supplied values, the stimulus is 1 at steps 10 and 11 and zero elsewhere. Apply the pulse only to selected fish: fish $i$ receives direct input $e_i s_t$. Exposure changes activation probability; it does not force a fish to escape. Unexposed fish receive social input and retain baseline stochastic activation.
+With the supplied values, the stimulus is 1 at steps 10 through 14 and zero elsewhere. Apply the pulse only to selected fish: fish $i$ receives direct input $e_i s_t$. Exposure changes activation probability; it does not force a fish to escape. Unexposed fish receive social input and retain baseline stochastic activation.
 
-Allocate `state_history` as an $N\times T$ array of 8-bit integers. Rows represent fish and columns represent update steps. Reserve each column for the outcome of its indexed update, starting with update 0. Use the post-update recording convention described below.
+Allocate `state_history` as an $N\times L$ array of 8-bit integers. Rows represent fish and columns represent update steps. Reserve each column for the outcome of its indexed update, starting with update 0. Use the post-update recording convention described below.
 
 ## 4. Compute activity, field, and activation probability
 
@@ -89,21 +89,21 @@ Activate an eligible baseline fish with probability
 
 ```math
 p_i=P(x_i:0\rightarrow1\mid h_i)
-=\frac{1}{1+\exp(-\beta h_i)}.
+=\frac{1}{1+\exp(-h_i/T)}.
 ```
 
 Draw one independent uniform number $u_i\in[0,1)$ from the simulation generator. If $u_i<p_i$, set the fish's state to 1 and its recovery timer to $d_E$. Otherwise leave it at baseline with recovery timer zero. Its refractory timer remains zero in either case. This is a probability per visit, with no extra time-step multiplier. Do not make activation draws for escaping or refractory fish.
 
-For positive $\beta$, positive fields favor activation and negative fields suppress it. At zero field, the probability is $1/2$. Larger $\beta$ makes the response sharper; in the limit $\beta\rightarrow\infty$, it approaches a threshold at $h_i=0$. At $\beta=0$, activation has probability $1/2$ regardless of the field.
+For positive $T$, positive fields favor activation and negative fields suppress it. At zero field, the probability is $1/2$. Smaller $T$ makes the response sharper; as $T\rightarrow0^+$, it approaches a threshold at $h_i=0$. As $T\rightarrow\infty$, activation approaches probability $1/2$ regardless of the field. In inverse-temperature notation, $\beta=1/T$; the default $T=0.1$ corresponds to $\beta=10$. Use $T$ directly in the implementation.
 
 Finite noise allows spontaneous escapes. With no stimulus and no escaping neighbors, the supplied parameters give
 
 ```math
-p_0=\frac{1}{1+\exp(\beta\theta)}
-=\frac{1}{1+\exp(12)}\approx6.14\times10^{-6}
+p_0=\frac{1}{1+\exp(\theta/T)}
+=\frac{1}{1+\exp(5)}\approx0.00669
 ```
 
-per eligible baseline fish per step. Evaluate the exponential directly in the activation formula.
+per eligible baseline fish per step, or approximately 0.669%. Evaluate the exponential directly in the activation formula.
 
 ### Relation to Glauber dynamics
 
@@ -117,11 +117,11 @@ the probability of selecting the active state is
 
 ```math
 P(x_i=1\mid\text{other states})
-=\frac{1}{1+\exp(\beta\Delta E_i)}
-=\frac{1}{1+\exp(-\beta h_i)}.
+=\frac{1}{1+\exp(\Delta E_i/T)}
+=\frac{1}{1+\exp(-h_i/T)}.
 ```
 
-Use this logistic form for baseline-to-escape activation. A conventional signed spin with local energy $-H_i\sigma_i$ instead has an energy difference of $-2H_i$, producing an exponent $-2\beta H_i$. Use the binary-state convention above, with exponent $-\beta h_i$ and no factor of two.
+Use this logistic form for baseline-to-escape activation. A conventional signed spin with local energy $-H_i\sigma_i$ instead has an energy difference of $-2H_i$, producing an exponent $-2H_i/T$. Use the binary-state convention above, with exponent $-h_i/T$ and no factor of two.
 
 Implement **Glauber-like activation with fixed escape and refractory durations**. Standard two-way heat-bath updates can select either state when a site is visited. For this model, apply stochastic activation only to eligible baseline fish, recover escaping fish when their escape timers expire, and block further activation until their refractory timers expire. Use the local energy interpretation to understand the activation formula; a global energy calculation is not required. The timer-based process should not be interpreted as equilibrium dynamics satisfying detailed balance.
 
@@ -137,7 +137,7 @@ At the start of step $t$, save a Boolean mask named `already_escaping` that iden
 6. Separately visit the fish identified by the saved `already_escaping` mask. Decrease each one's `recovery_timer` by one. If it reaches zero, set that fish's `spin` to 0 and assign $d_R$ to its `refractory_timer`.
 7. Copy all agent states into history column $t$.
 
-Repeat for every step from 0 through $T-1$. Generate one permutation per step and one uniform draw per eligible fish, in visitation order, so that random-number consumption is reproducible.
+Repeat for every step from 0 through $L-1$. Generate one permutation per step and one uniform draw per eligible fish, in visitation order, so that random-number consumption is reproducible.
 
 Perform activation as a random sequential sweep within each discrete time step, then advance the saved groups' timers. Include fish due to recover in the social field throughout the activation sweep. Leave newly escaping fish's escape timers unchanged until the following step. Likewise, do not decrement a newly assigned refractory timer in the step of recovery. Use the saved masks to enforce both rules.
 
@@ -156,7 +156,7 @@ These sets partition the school under the state and timer invariants above. For 
 ```math
 a_k=\frac{A_{k-1}}{N},\qquad
 h_k=e_{\pi_k}s_t+Ja_k-\theta,\qquad
-p_k=\frac{1}{1+\exp(-\beta h_k)},
+p_k=\frac{1}{1+\exp(-h_k/T)},
 ```
 
 ```math
@@ -194,7 +194,7 @@ q_i^{(t+1)}=
 
 ### Escape and refractory timing example
 
-With $d_E=6$, a fish activated during step $t$ appears as escaping in recorded columns $t$ through $t+5$. It recovers at the end of step $t+6$, after contributing to that step's social field, and receives a refractory timer of 12. Block activation during the following 12 full steps, $t+7$ through $t+18$. Its timer reaches zero at the end of step $t+18$, so its next eligible activation step is $t+19$.
+With the default $d_E=5$ and $d_R=10$, a fish activated during step $t$ appears as escaping in recorded columns $t$ through $t+4$. It recovers at the end of step $t+5$, after contributing to that step's social field, and receives a refractory timer of 10. Block activation during the following 10 full steps, $t+6$ through $t+15$. Its timer reaches zero at the end of step $t+15$, so its next eligible activation step is $t+16$.
 
 In general, the next eligible step is $t+d_E+d_R+1$. Setting $d_R=0$ makes a recovered fish eligible on the step immediately after recovery, restoring the behavior without an additional refractory period. Use deterministic timer expiration for both phases. Further stimulus exposure must not extend either timer.
 
@@ -206,7 +206,7 @@ Let $H_{i,t}$ denote the entry at row $i$, column $t$ of `state_history`. After 
 H_{i,t}=x_i^{(t+1)}.
 ```
 
-Store the outcome of update 0 in column 0 and retain exactly $T$ post-update columns. Retain the time, stimulus, and exposure arrays and leave the final states and both timers on the agents after the run.
+Store the outcome of update 0 in column 0 and retain exactly $L$ post-update columns. Retain the time, stimulus, and exposure arrays and leave the final states and both timers on the agents after the run.
 
 Create a two-panel Matplotlib figure with a shared time axis and constrained layout. In the upper panel, draw `state_history` using `pcolormesh`, with the time array on the horizontal axis and fish indices on the vertical axis. Use a two-color map: blue (`#2166ac`) for baseline and red (`#b2182b`) for escape. Label every fish index and append an asterisk to directly exposed fish. Label the vertical axis “Fish (* = directly exposed),” and include the population size and exposed count in the title. Add a colorbar labeled “State,” with ticks at 0 and 1 labeled “Baseline (0)” and “Escape (1).” Remember that state 0 includes both eligible and refractory fish; this binary raster does not distinguish them.
 
@@ -217,14 +217,8 @@ f_{\mathrm{escape}}[t]
 =\frac{1}{N}\sum_iH_{i,t}.
 ```
 
-This equals activity at the end of each step. Plot it as a step curve in the lower panel, with the vertical axis covering 0 to 1 and labeled “Fraction escaping.” Align each raster column and curve segment with the interval from its update index to the next. Add a dotted horizontal line at 0.8 to show the criterion for a response involving at least 80% of the school. Shade the stimulus interval in both panels and label the shared horizontal axis “Time (simulation steps).” Display the figure.
+This equals activity at the end of each step. Plot it as a step curve in the lower panel, with the vertical axis covering 0 to 1 and labeled “Fraction escaping.” Align each raster column and curve segment with the interval from its update index to the next. Mark stimulus onset with a dashed black vertical line and shade the stimulus interval in both panels and label the shared horizontal axis “Time (simulation steps).” Display the figure.
 
-## 7. Verify the implementation
+## 7. Run the notebook
 
-- Check that exactly `n_exposed` entries of the exposure mask are true and that the same seed reproduces the subset and trajectory. Test both boundary cases, `n_exposed = 0` and `n_exposed = n_fish`.
-- With $J=0$, verify that the activation probability of an unexposed eligible fish is independent of stimulus strength: its only remaining activation drive is baseline noise.
-- Reject negative or noninteger refractory durations. Check that both timers remain nonnegative integers and that the three state and timer conditions in Section 2 hold after every update.
-- Check that refractory fish receive no activation visits, consume no activation draws, and contribute zero social input, including when their refractory timer is 1 at the start of a step.
-- Follow one activation through its full timer sequence. Verify recovery at step $t+d_E$, no decrement of the newly assigned refractory timer during that step, and first renewed eligibility at $t+d_E+d_R+1$.
-- With `refractory_duration = 0`, verify that recovery restores eligibility on the following step. Keep the remaining rules and random-number consumption unchanged for this comparison.
-- Confirm that the escape-fraction panel equals the column mean of the binary state history and that the stimulus shading covers exactly the pulse interval.
+Execute the cells in order to reset the random generator, agents, timers, and history before each fresh trial. Repeating the full run with the same seed in the same software environment should reproduce the trajectory. Rerunning only the simulation cell continues from the existing states and random generator while overwriting the history.
