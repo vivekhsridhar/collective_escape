@@ -45,13 +45,13 @@ Create one NumPy random generator using `default_rng` with `random_seed`. Use th
 
 Create the time array containing $t=0,\ldots,T-1$. Evaluate the square-wave function on time shifted by `stimulus_start`, giving
 
-$$
+```math
 s_t=
 \begin{cases}
  s_0,&t_{\mathrm{start}}\leq t<t_{\mathrm{start}}+d_s,\\
  0,&\text{otherwise}.
 \end{cases}
-$$
+```
 
 With the supplied values, the stimulus is 1 at steps 10 and 11 and zero elsewhere. Apply the same stimulus to all fish.
 
