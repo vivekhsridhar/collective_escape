@@ -254,22 +254,22 @@ A neighbour should generate a transient escape cue at its escape time. It must n
 
 ## Model
 
-For every unescaped fish \(i\), maintain a continuous decision variable \(x_i(t)\):
+For every unescaped fish $i$, maintain a continuous decision variable $x_i(t)$:
 
-\[
+```math
 \tau\frac{dx_i}{dt}
 =
 -x_i
 +L_i(t)
 +\alpha S_i(t)
 +\eta_i(t).
-\]
+```
 
-Fish \(i\) escapes when
+Fish $i$ escapes when
 
-\[
+```math
 x_i(t)\geq\theta_i.
-\]
+```
 
 After escaping:
 
@@ -280,7 +280,7 @@ After escaping:
 
 ### Direct evidence
 
-Represent direct loom evidence as \(L_i(t)\).
+Represent direct loom evidence as $L_i(t)$.
 
 The implementation must support different loom exposure histories for different fish:
 
@@ -289,36 +289,36 @@ The implementation must support different loom exposure histories for different 
 - strong exposure;
 - different exposure onset times.
 
-If the existing model already calculates loom visibility or an external field, reuse that implementation where possible. Otherwise, define a clean interface that accepts either a function or an agent-by-time array for \(L_i(t)\).
+If the existing model already calculates loom visibility or an external field, reuse that implementation where possible. Otherwise, define a clean interface that accepts either a function or an agent-by-time array for $L_i(t)$.
 
 Do not introduce escape direction.
 
 ### Social evidence
 
-When neighbour \(j\) escapes at time \(t_j\), fish \(i\) receives a delayed transient cue:
+When neighbour $j$ escapes at time $t_j$, fish $i$ receives a delayed transient cue:
 
-\[
+```math
 C_{ij}(t)
 =
 V_{ij}\,K(d_{ij})\,q(t-t_j-\delta).
-\]
+```
 
 Here:
 
-- \(V_{ij}\) is the visibility or adjacency between fish \(i\) and \(j\);
-- \(K(d_{ij})\) is the distance-dependent interaction strength;
-- \(\delta\) is the social sensory–motor delay;
-- \(q(\cdot)\) is a brief temporal pulse.
+- $V_{ij}$ is the visibility or adjacency between fish $i$ and $j$;
+- $K(d_{ij})$ is the distance-dependent interaction strength;
+- $\delta$ is the social sensory–motor delay;
+- $q(\cdot)$ is a brief temporal pulse.
 
 Use an exponential pulse by default:
 
-\[
+```math
 q(u)=
 \begin{cases}
 0, & u<0,\\
 \exp(-u/\tau_{\mathrm{cue}}), & u\geq0.
 \end{cases}
-\]
+```
 
 Make the pulse kernel modular so that a square pulse or another kernel could be substituted later.
 
@@ -330,9 +330,9 @@ Implement the following three modes behind a common interface.
 
 Only the strongest currently available neighbour cue contributes:
 
-\[
+```math
 S_i(t)=\max_j C_{ij}(t).
-\]
+```
 
 This represents a system in which one sufficiently strong neighbour can trigger an escape and simultaneous cues are not summed.
 
@@ -340,11 +340,11 @@ This represents a system in which one sufficiently strong neighbour can trigger 
 
 All currently available neighbour cues are summed:
 
-\[
+```math
 S_i(t)=\sum_j C_{ij}(t).
-\]
+```
 
-Because \(x_i(t)\) leaks with timescale \(\tau\), cues arriving close together can jointly cause threshold crossing, whereas widely separated cues may not.
+Because $x_i(t)$ leaks with timescale $\tau$, cues arriving close together can jointly cause threshold crossing, whereas widely separated cues may not.
 
 This should be the default new model.
 
@@ -352,24 +352,24 @@ This should be the default new model.
 
 Maintain a separate direct-evidence variable:
 
-\[
+```math
 \tau_L\frac{dx_i^{L}}{dt}
 =
 -x_i^{L}+L_i(t).
-\]
+```
 
 Use this to modulate the effectiveness of social evidence:
 
-\[
+```math
 S_i^{\mathrm{effective}}(t)
 =
 G(x_i^{L})\sum_j C_{ij}(t).
-\]
+```
 
 Support either:
 
-- a hard gate, \(G=1\) when \(x_i^{L}\geq\phi\) and \(0\) otherwise; or
-- a sigmoid gate centred on \(\phi\).
+- a hard gate, $G=1$ when $x_i^{L}\geq\phi$ and $0$ otherwise; or
+- a sigmoid gate centred on $\phi$.
 
 This mode tests whether social cues primarily recruit fish already primed by weak direct evidence.
 
@@ -383,22 +383,22 @@ For each timestep:
 2. Calculate social input from escape events that have completed their delay.
 3. Update all decision variables using Euler–Maruyama:
 
-\[
-x_i(t+\Delta t)
-=
-x_i(t)
-+
-\Delta t
-\left[
--\frac{x_i(t)}{\tau}
-+L_i(t)
-+\alpha S_i(t)
-\right]
-+
-\sigma\sqrt{\Delta t}\,\epsilon_i,
-\]
+   ```math
+   x_i(t+\Delta t)
+   =
+   x_i(t)
+   +
+   \Delta t
+   \left[
+   -\frac{x_i(t)}{\tau}
+   +L_i(t)
+   +\alpha S_i(t)
+   \right]
+   +
+   \sigma\sqrt{\Delta t}\,\epsilon_i,
+   ```
 
-where \(\epsilon_i\sim\mathcal N(0,1)\).
+   where $\epsilon_i\sim\mathcal N(0,1)$.
 
 4. Identify all threshold crossings simultaneously.
 5. Record those escapes and add their social events to the event queue.
@@ -435,9 +435,9 @@ Reuse the existing spatial arrangement and interaction network.
 
 If positions are available, calculate
 
-\[
+```math
 W_{ij}=V_{ij}K(d_{ij}).
-\]
+```
 
 Keep the distance kernel modular. Include at least:
 
@@ -520,7 +520,7 @@ This should demonstrate whether multiple weak social cues can jointly trigger es
 Produce at least:
 
 1. an escape raster showing agent escape times;
-2. decision-variable trajectories \(x_i(t)\) for representative fish;
+2. decision-variable trajectories $x_i(t)$ for representative fish;
 3. cascade size versus temporal dispersion of initial escapes;
 4. escape probability versus number of recent neighbour escapes;
 5. cascade size across the three integration modes;
