@@ -6,5 +6,5 @@ class Agent:
 
     def __init__(self):
         self.state = np.random.choice([0, 1])
-        self.recovery_timer = 0
+        self.escape_timer = 0
         self.refractory_timer = 0
