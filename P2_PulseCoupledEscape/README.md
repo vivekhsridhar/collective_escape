@@ -47,11 +47,22 @@ adjacency[1, 0] = 0.0
 A weight of `0.5` halves that connection's contribution. A replacement network
 must have shape `(n_fish, n_fish)`; keeping its diagonal zero avoids self-input.
 
-Each escape adds one pulse of size `social_strength` to each neighbour's
-evidence, multiplied by the connection weight, on the next timestep.
-Pulses add together without averaging by group
-size. The pulse is an evidence increment, so it is not multiplied by `dt`.
-Its contribution then decays through the existing `tau_evidence` term.
+Each escape supplies a one-timestep social input of amplitude `social_strength`,
+multiplied by the connection weight, to each neighbour on the next timestep.
+Inputs add together without averaging by group size. Direct and social inputs
+enter the drift together:
+
+```python
+total_input = direct_input + social_input[fish_id]
+drift = (total_input - fish.evidence) / tau_evidence
+```
+
+The evidence change is `drift * dt` plus Gaussian noise. A single social cue
+therefore contributes `social_strength * weight * dt / tau_evidence` to evidence.
+`social_strength` is an input level; its accumulated contribution then decays
+through the existing evidence leak. Because the cue lasts one timestep, its
+total contribution depends on `dt`. The archived model uses the same drift
+form with separately specified cue durations.
 
 All social inputs use the previous timestep's escape spikes, computed before
 any fish updates. Newly triggered escapes therefore affect neighbours on the
@@ -81,10 +92,9 @@ Set `noise_strength` to zero for the deterministic response.
 Evidence can fluctuate below zero, and noise can trigger escape even in
 unexposed fish. Those escapes can also supply social evidence to neighbours.
 
-Sheltered and unsheltered fish use the same evidence update. Between social
-pulses, the deterministic part pulls evidence toward the loom input with
-timescale `tau_evidence`, or toward zero when the loom is absent. Social pulses
-add to that same evidence, and noise is added at every timestep.
+Sheltered and unsheltered fish use the same evidence update. The drift pulls
+evidence toward the sum of direct and social input with timescale `tau_evidence`,
+or toward zero when both are absent. Gaussian noise is added at every timestep.
 
 State only determines which behavioral threshold applies. Reaching `threshold`
 while unsheltered triggers escape. A sheltered fish recovers when evidence

@@ -189,10 +189,12 @@ P2 is being rebuilt incrementally, with short, readable notebook cells.
 **Current step: pulse-coupled fish on a fully connected network, with noisy evidence and partial exposure to an angular-size loom.**
 
 - [`agent.py`](P2_PulseCoupledEscape/agent.py) stores the fish's evidence and state.
-- [`simulation.ipynb`](P2_PulseCoupledEscape/simulation.ipynb) applies angular-size input to the first `n_exposed` fish, delivers neighbour escape pulses through a fully connected network, and plots input, evidence, escape spikes, and shelter states.
+- [`stimulus.py`](P2_PulseCoupledEscape/stimulus.py) generates angular-size looms or square pulses.
+- [`network.py`](P2_PulseCoupledEscape/network.py) constructs an editable network, initially fully connected.
+- [`simulation.ipynb`](P2_PulseCoupledEscape/simulation.ipynb) selects the stimulus and network, defines parameters, runs the fish updates, and plots input, evidence, escape spikes, and shelter states.
 
 See the [P2 guide](P2_PulseCoupledEscape/README.md) for the current step.
-Social pulses add evidence once per escape and decay through the same evidence leak as the loom response.
+Direct input and one-timestep social cues enter the same evidence drift, scaled by `dt / tau_evidence`.
 
 The [previous P2 implementation and full specification](archive/README.md)
 are preserved as a reference snapshot. Phase 1 is unchanged.
