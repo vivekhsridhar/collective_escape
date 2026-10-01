@@ -186,13 +186,13 @@ In general, the next eligible step is $t+d_E+d_R+1$. Setting $d_R=0$ makes a rec
 
 P2 is being rebuilt incrementally, with short, readable notebook cells.
 
-**Current step: independent fish with noisy evidence and partial stimulus exposure.**
+**Current step: pulse-coupled fish on a fully connected network, with noisy evidence and partial exposure to an angular-size loom.**
 
 - [`agent.py`](P2_PulseCoupledEscape/agent.py) stores the fish's evidence and state.
-- [`simulation.ipynb`](P2_PulseCoupledEscape/simulation.ipynb) applies a stimulus pulse to the first `n_exposed` fish, adds independent evidence noise, and plots evidence, escape spikes by fish, and shelter states.
+- [`simulation.ipynb`](P2_PulseCoupledEscape/simulation.ipynb) applies angular-size input to the first `n_exposed` fish, delivers neighbour escape pulses through a fully connected network, and plots input, evidence, escape spikes, and shelter states.
 
 See the [P2 guide](P2_PulseCoupledEscape/README.md) for the current step.
-Social interactions will be added after reviewing the independent group response.
+Social pulses add evidence once per escape and decay through the same evidence leak as the loom response.
 
 The [previous P2 implementation and full specification](archive/README.md)
 are preserved as a reference snapshot. Phase 1 is unchanged.
