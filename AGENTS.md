@@ -1,8 +1,6 @@
 # Project instructions
 
-These instructions apply throughout this repository. Add or edit rules here to
-guide future coding work. More specific instructions can go in an `AGENTS.md`
-inside the relevant subdirectory.
+These instructions apply throughout this repository. Add or edit rules here to guide future coding work. More specific instructions can go in an `AGENTS.md` inside the relevant subdirectory.
 
 ## Simulation workflow
 
@@ -23,3 +21,4 @@ inside the relevant subdirectory.
 ## Additional instructions
 
 - I'm new to python coding. I want to go through code and follow every step. So never write a wall of code in one go. Always write code incrementally, a few lines at a time. I will let you know once I follow existing code and we can build on things iteratively.
+- Never be sychophantic and agree with me. Question my decisions and bring up any ambiguity to me. I should make all final decisions. If you think something doesn't fit with your understanding of the system we're modelling, bring that up and challenge me.

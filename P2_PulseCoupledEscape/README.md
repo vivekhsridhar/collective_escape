@@ -1,6 +1,6 @@
 # P2: Pulse-coupled escape, step by step
 
-## Independent fish: external input, escape, and recovery
+## Independent fish: noisy evidence, escape, and recovery
 
 Start with [agent.py](agent.py). The `Agent` class stores two values:
 
@@ -16,15 +16,24 @@ pulse only to the first `n_exposed` fish. The others receive zero input.
 They respond independently, without social coupling.
 Each history array has fish on rows and timesteps on columns.
 
-Exposed fish share the same parameters and deterministic update, so their
-evidence curves overlap. Unexposed fish remain unsheltered with zero evidence.
-One fish's response cannot affect another's.
+Every fish receives a Gaussian noise increment at each timestep, independent
+across fish and time and scaled by `noise_strength * np.sqrt(dt)`. The
+square-root scaling makes the noise variance proportional to the timestep
+duration. Evidence retains memory through the leaky update even though the
+noise draws are independent. `random_seed` makes runs reproducible.
+Set `noise_strength` to zero for the deterministic response.
+Evidence can fluctuate below zero, and noise can trigger escape even in
+unexposed fish. One fish's response cannot affect another's.
 
-Reaching `threshold` while unsheltered triggers escape. While sheltered, any
-positive external input prevents evidence from decreasing; stronger input can
-still raise it. Once the input is absent, evidence decays with timescale
-`tau_evidence`. The fish returns to the unsheltered state only when evidence falls below
-`recovery_threshold`, which is lower than `threshold`.
+Sheltered and unsheltered fish use the same evidence update. The deterministic
+part pulls evidence toward the perceived input strength with timescale
+`tau_evidence`, or toward zero when input is absent. Evidence can rise or fall
+in either state, with noise added at every timestep.
+
+State only determines which behavioral threshold applies. Reaching `threshold`
+while unsheltered triggers escape. A sheltered fish recovers when evidence
+falls below `recovery_threshold`, including when noise causes the crossing.
+This threshold is lower than `threshold`.
 
 The fish remains sheltered while evidence stays at or above `recovery_threshold`.
 Another escape spike requires recovery first. The notebook plots the
@@ -32,10 +41,9 @@ input to exposed fish, evidence curves, escape spikes by fish, and a shelter-sta
 heatmap. The update loop is visible in the notebook.
 
 Edit the parameter cells and run from the top to reset the simulation.
-Input weaker than `threshold` produces a subthreshold response: evidence rises
-and then decays, with no escape spike.
-Time is in seconds. This step is deterministic; social interactions and noise
-will come later.
+Without noise, input weaker than `threshold` produces a subthreshold response
+with no escape spike. With noise, threshold crossings can occur even under
+weak input. Time is in seconds. Social interactions will come later.
 
 The previous full implementation is preserved as a
 [reference snapshot](../archive/README.md). P1 is unchanged.
