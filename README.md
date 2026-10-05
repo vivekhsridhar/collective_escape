@@ -190,19 +190,27 @@ P2 is being rebuilt incrementally, with short, readable notebook cells.
 
 - [`agent.py`](P2_PulseCoupledEscape/agent.py) stores each fish's fixed threshold, evidence, state, and active-phase timer.
 - [`stimulus.py`](P2_PulseCoupledEscape/stimulus.py) provides `spontaneous_startle` to activate one initial fish, alongside reusable loom and square-wave functions.
-- [`network.py`](P2_PulseCoupledEscape/network.py) supplies editable adjacency matrices; the notebook uses a random network.
+- [`network.py`](P2_PulseCoupledEscape/network.py) generates directed binary networks with a specified mean in-degree, at least one incoming link per fish, and a directed path between every pair of fish.
 - [`simulation.ipynb`](P2_PulseCoupledEscape/simulation.ipynb) defines parameters, starts one fish, runs the social cascade, and plots evidence, escape onsets, and behavioral states.
 - [`dose_memory.ipynb`](P2_PulseCoupledEscape/dose_memory.ipynb) explains dose arrivals and finite memory using the same functions in [`dose.py`](P2_PulseCoupledEscape/dose.py).
 
 The initial starter is chosen uniformly at random or selected with `initial_fish`.
+Only susceptible fish receive doses and update their evidence.
 Later escapes depend only on the sum of doses remembered within
 `memory_duration`. Each fish has a threshold drawn uniformly from zero to
-`2 * mean_threshold`, held fixed throughout the run. `mean_threshold = 0.034`
-adopts Sosna's baseline fit from SI section 6.3, page 9, as a reference value;
-it has not been recalibrated to this random network.
+`2 * mean_threshold`, held fixed throughout the run. `mean_threshold = 0.10`
+is an exploratory setting for the connected binary random network, chosen
+to delay responses. It is not a fit to experimental cascade sizes.
 Active fish send doses for `active_duration`, then enter
 absorbing shelter. Each fish can escape at most once. Column zero records the
 initial state; subsequent columns record the simulation updates.
+The run stops after the first update with no active fish remaining. Histories
+and plots include that final state and end at the actual stopping time.
+
+Run `simulation.ipynb` from the top. The network uses the visible `n_fish`,
+`mean_in_degree`, and `network_seed` parameters. Every pair of fish
+has a directed path between them; escape thresholds still determine
+whether a cascade propagates along those paths.
 
 See the [P2 guide](P2_PulseCoupledEscape/README.md) for timing and the remaining
 differences from Sosna's model. The [previous P2 implementation and full
