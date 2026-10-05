@@ -1,154 +1,146 @@
-# P2: Pulse-coupled escape, step by step
+# P2: One startle and a social escape cascade
 
-## Pulse-coupled fish: square-wave input, social escapes, and recovery
+The notebook follows one initially startled fish and the escapes it can trigger
+through social evidence. Fish progress from unsheltered to actively escaping
+to sheltered. Shelter is absorbing: each fish can escape at most once per run.
 
-Start with [agent.py](agent.py). The `Agent` class stores two values:
+## Files and setup
 
-- `evidence`: accumulated evidence of a threat, initially `0.0`.
-- `state`: `0` means unsheltered; `1` will mean sheltered.
+[agent.py](agent.py) defines `Agent(threshold)`, which stores four values:
 
-The other reusable components are:
+- `threshold`: the fish's fixed activation threshold, supplied at initialization.
+- `evidence`: remembered social evidence, initially `0.0`.
+- `state`: `0` for unsheltered, `1` for actively escaping, and `2` for sheltered.
+- `active_timer`: the number of active-phase updates remaining, initially `0`.
 
-- [stimulus.py](stimulus.py): `loom` and `square_wave`, each returning an input array matching `time`.
-- [network.py](network.py): `all_to_all`, `ring`, and `random_network`, each returning an editable adjacency matrix.
+The reusable functions are:
 
-Open [simulation.ipynb](simulation.ipynb) and run its short cells in order.
-Use `P2_PulseCoupledEscape/` as the notebook working directory, as in P1,
-so the imports resolve to the files beside the notebook. Parameters, the
-stimulus choice, network setup, simulation loop, and plots remain visible there.
+- [stimulus.py](stimulus.py): `spontaneous_startle` activates the initial fish.
+  The file also retains `loom` and `square_wave` for external-stimulus experiments.
+- [network.py](network.py): `random_network` supplies the notebook's adjacency
+  matrix. `all_to_all` and `ring` are also available in the module.
+- [dose.py](dose.py): `draw_doses` samples packets from active neighbours;
+  `accumulate_doses` sums the packets in a finite memory window.
 
-The notebook uses `square_wave(...)` by default. Its amplitude, onset, and
-duration are visible in the parameter cell:
+Open [simulation.ipynb](simulation.ipynb) and run its short cells in order, using
+`P2_PulseCoupledEscape/` as the working directory. Parameters, network setup,
+initialization, the update loop, and three plots remain visible in the notebook.
+[dose_memory.ipynb](dose_memory.ipynb) explains the dose and memory functions
+separately, using one sender and one receiver without further escapes.
 
-```python
-external_input = square_wave(
-    time, stimulus_strength, duration=stimulus_duration, start=stimulus_start,
-)
-```
+## Start one fish
 
-Both functions include the start and exclude the end of the stimulus.
-Other stimulus functions can return another array with one value per timestep.
+`spontaneous_startle(agents, active_steps, rng, fish_id=None)` sets one fish's
+state to active, gives it the full `active_steps` timer, and returns its index.
+It bypasses the evidence threshold and is called once during initialization.
+All other fish start unsheltered with zero evidence.
 
-The notebook creates `n_fish` separate agents and applies the square pulse
-only to the first `n_exposed` fish. The others receive no direct stimulus input,
-but all fish can receive evidence from neighbour escapes.
-Each history array has fish on rows and timesteps on columns.
+The notebook's `initial_fish = None` selects the starter uniformly at random.
+Setting `initial_fish` to a fish index selects that fish instead. Fish indices
+start at zero. The returned starter's escape onset is recorded in column zero.
 
-The notebook uses `adjacency = random_network(n_fish, connection_probability, network_seed)`.
-Each pair connects independently with the chosen probability.
-`adjacency[i, j]` is the weight from fish `j` to fish `i`.
-To choose another network, replace the assignment with one of these calls:
+`startle_rng = np.random.default_rng([random_seed, 0])` controls starter choice.
+`dose_rng = np.random.default_rng([random_seed, 1])` controls dose arrivals.
+These separate generators make each part reproducible. `network_seed` controls
+network construction independently.
 
-- `adjacency = ring(n_fish, neighbours_each_side)` connects fish to neighbours on either side in a circular ordering.
-- `adjacency = all_to_all(n_fish)` connects every pair.
+There is no external input or personal-evidence noise. Every later escape is
+triggered by social evidence exceeding that fish's `threshold`.
 
-All three networks have connections in both directions and no self-connections.
-Their parameters are visible in the notebook. `network_seed` makes the random
-network reproducible independently of the evidence noise's `random_seed`.
+## Individual thresholds
 
-Edit this matrix before running the simulation to remove or reweight connections.
-For example, removing the connection between fish 0 and fish 1 in both directions is:
+The notebook draws `thresholds` uniformly between zero and `2 * mean_threshold`
+and passes one value to each agent. Each threshold stays fixed during the run.
+`threshold_rng = np.random.default_rng([random_seed, 2])` makes these draws
+independent of starter selection and dose arrivals. The same seed reproduces
+the same thresholds when the notebook is rerun from the top.
 
-```python
-adjacency[0, 1] = 0.0
-adjacency[1, 0] = 0.0
-```
+`mean_threshold` is the distribution's expected mean, not the mean received
+dose. A finite sample of fish need not have exactly this average threshold.
+`mean_threshold = 0.034` adopts Sosna's baseline fit from SI section 6.3,
+page 9: Context 1, before the first Schreckstoff exposure, in the Fig. 4D
+comparison. Its reported 95% credible interval is `[0.030, 0.035]`.
+The paper fitted this value using experimental networks and cascade sizes.
+Here it is a reference value, not a recalibration to the illustrative random
+network.
 
-Positive weights set relative contributions to a weighted average. Scaling every
-weight in a row by the same positive factor leaves that fish's social input
-unchanged. A replacement network must have shape `(n_fish, n_fish)`; keeping its
-diagonal zero avoids self-input.
+## Receive and remember social doses
 
-Social input is the weighted mean of neighbouring escape cues:
+The notebook uses `random_network(n_fish, connection_probability, network_seed)`.
+Each pair connects independently, in both directions, with no self-connections.
+`adjacency[i, j]` is the weight from sender `j` to receiver `i`. The network
+is fixed during a run and does not use fish positions.
 
-```math
-S_i = w\frac{\sum_j A_{ij}c_j}{\sum_j A_{ij}}.
-```
+At each update, an active neighbour sends a packet with probability
+`dose_rate * adjacency[i, j] * dt`. This probability must be at most one.
+Each arriving packet contributes `dose_size / neighbour_count[i]`, where the
+count includes all positive incoming connections, including inactive neighbours.
+An isolated fish receives no doses.
 
-For binary connections, the denominator is the number of neighbours of fish
-`i`. Fish without neighbours receive zero social input. With binary cues, this
-would be the fraction of neighbours escaping. The current cues fade over time
-and can overlap after repeated escapes, so their mean need not stay below one.
-It does not measure the fraction currently sheltered.
+The default binary connections give certain packet arrivals while a neighbour
+is active. Fractional weights between zero and one make arrivals stochastic.
+The weight changes arrival probability, not packet size.
 
-For an all-to-all network, the mean divides the summed input by `n_fish - 1`.
-`social_strength` sets the response to the mean cue, independently of neighbour
-count, so the same value gives weaker input than in the summed model.
+`dose_history[:, step]` stores the sum of normalized packets at that update.
+`accumulate_doses` sums the most recent `memory_steps` columns, including the
+current one. Evidence is this remembered sum, compared directly with the
+escape threshold without an additional multiplier.
+The sum is neither added to previous evidence nor multiplied by `dt` again.
 
-Each escape adds one to the escaping fish's `social_cue`. The cue reaches
-neighbours on the next timestep, scaled by `social_strength` and the connection
-weight divided by the recipient's total incoming weight. Between timesteps it
-decays by `np.exp(-dt / tau_social)`. An isolated cue
-retains about 37% of its initial value after `tau_social` seconds, with no abrupt
-cutoff. The default timescale is illustrative, following the archived example.
+A packet received at update `k` keeps its full contribution through
+`k + memory_steps - 1` and leaves the sum at `k + memory_steps`.
+`memory_steps = max(1, round(memory_duration / dt))` converts the memory
+window from seconds to whole updates. This memory has no exponential leak.
 
-`tau_social` describes how long an escape remains an incoming signal.
-`tau_evidence` describes how quickly accumulated evidence responds to the total
-input and how it decays after input disappears. Increasing `tau_social` at fixed
-amplitude also increases the total social input delivered by an escape.
+## Active phases and timing
 
-The averaged social input and direct input enter the drift together:
+`n_steps` time samples run from index `0` through `n_steps - 1`, with
+`time = np.arange(n_steps) * dt`. Column zero stores the initial state, with
+one active fish and zero evidence. The loop performs `n_steps - 1` updates,
+starting at index one. Each later column records the result of that update.
 
-```python
-total_input = direct_input + social_input[fish_id]
-drift = (total_input - fish.evidence) / tau_evidence
-```
+Dose arrivals use the active-state snapshot from before the update. A fish
+newly activated at update `k` first sends on update `k + 1`. An already-active
+fish sends before its timer decreases, so fish update order cannot create
+several links of propagation within one timestep.
 
-The evidence change is `drift * dt` plus Gaussian noise. The decaying social
-signal feeds this drift over multiple timesteps. Its lifetime is measured in
-seconds rather than timesteps, so reducing `dt` refines the approximation to
-the same cue. Accumulated evidence can continue rising while a cue is fading
-if total input remains above the evidence level.
+`active_steps = max(1, round(active_duration / dt))` sets the active-phase
+length. With `m = active_steps`, a fish activated at index `k` is recorded
+active at `k` through `k + m - 1`. It sends during updates `k + 1` through
+`k + m`, then enters shelter at index `k + m`. This also applies to the
+initial starter with `k = 0`.
 
-All social inputs use cues computed before any fish updates. At the end of each
-timestep, old cues decay and new escape spikes are added. Newly triggered
-escapes therefore affect neighbours on the next timestep, regardless of loop
-order. Remaining sheltered emits no new cues, but the existing cue continues to
-fade. Repeated escapes add new cues. Sheltered fish still receive social input.
-Set `social_strength` to zero to recover the independent-fish model.
+Sheltered fish remain sheltered and send no doses. Evidence is still recorded
+in every state, but only unsheltered fish can respond to it. Entering shelter
+does not clear doses already held in neighbours' memories.
 
-The optional `loom` function represents a disk approaching at constant `approach_speed`.
-Its angular size is `2 * np.arctan(object_radius / distance)`. Lengths are in
-metres and speed is in metres per second; the geometry values are illustrative.
-The stimulus appears at `start_distance` and disappears at `end_distance`, so
-`duration = (start_distance - end_distance) / approach_speed`.
+The run ends at its fixed observation limit. Late escapes may still be active
+in the last column; increasing `total_time` reveals their shelter entry.
+The plots show evidence, escape onsets, and the three behavioral states.
+There is no common threshold line; `thresholds` stores the fish-specific values.
+Each fish has at most one onset mark, including the initial starter at time zero.
 
-Input is proportional to angular size, scaled toward `stimulus_strength` at
-the endpoint. It starts above zero, increases throughout the approach, and
-drops to zero when the approach ends. The last sample before the exclusive end is
-slightly below the endpoint strength. With fixed geometry, speed changes
-duration but not endpoint strength. This version does not give slow approaches
-a lower amplitude or impose a preference for intermediate speeds.
+## Reproducing Sosna et al. (2019)
 
-Every fish receives a Gaussian noise increment at each timestep, independent
-across fish and time and scaled by `noise_strength * np.sqrt(dt)`. The
-square-root scaling makes the noise variance proportional to the timestep
-duration. Evidence retains memory through the leaky update even though the
-noise draws are independent. `random_seed` makes runs reproducible.
-Set `noise_strength` to zero for the deterministic response.
-Evidence can fluctuate below zero, and noise can trigger escape even in
-unexposed fish. Those escapes can also supply social evidence to neighbours.
+The model uses the paper's dose scale and rate, neighbour normalization,
+finite social memory, active duration, and absorbing terminal state. The
+notebook's single forced initial startle also follows its cascade setup.
+The following differences remain:
 
-Sheltered and unsheltered fish use the same evidence update. The drift pulls
-evidence toward the sum of direct and social input with timescale `tau_evidence`,
-or toward zero when both are absent. Gaussian noise is added at every timestep.
+| Component | Current notebook | Sosna model |
+| --- | --- | --- |
+| Starter | Uniform random fish or a chosen index | Observed initial startler for each experimental cascade |
+| Network | Illustrative binary random network | Empirical directed weights from positions and visual features |
+| Mean threshold | Baseline reference `0.034` from SI section 6.3, applied to the random network | Mean threshold fitted to experimental cascade sizes, with the same uniform distribution |
+| Dose reception | Evidence recorded in every state | Doses received by susceptible fish |
+| Run duration | Fixed observation limit | Stop when no active fish remain |
+| Comparison | One realization and its time courses | Repeated simulations fitted to experimental cascade sizes |
 
-State only determines which behavioral threshold applies. Reaching `threshold`
-while unsheltered triggers escape. A sheltered fish recovers when evidence
-falls below `recovery_threshold`, including when noise causes the crossing.
-This threshold is lower than `threshold`.
-
-The fish remains sheltered while evidence stays at or above `recovery_threshold`.
-Another escape spike requires recovery first. The notebook plots the
-input to exposed fish, evidence curves, escape spikes by fish, and a shelter-state
-heatmap. A further plot compares incoming social input with accumulated evidence
-for `focal_fish`, which selects an unexposed fish in the default setup. The update
-loop is visible in the notebook.
-
-Edit the parameter cells and run from the top to reset the simulation.
-Without noise or social input, a stimulus peak weaker than `threshold` produces a
-subthreshold response with no escape spike. Noise and social pulses can cause
-threshold crossings even under weak or absent direct input. Time is in seconds.
+This notebook explores the cascade mechanism. Reproducing published cascade-size
+distributions additionally requires the experimental configurations, starter
+identities, and threshold fitting procedure. See the
+paper's [Behavioral Contagion Model](https://pmc.ncbi.nlm.nih.gov/articles/PMC6789631/)
+and SI section 6.
 
 The previous full implementation is preserved as a
 [reference snapshot](../archive/README.md). P1 is unchanged.
