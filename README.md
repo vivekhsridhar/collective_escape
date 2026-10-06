@@ -1,218 +1,127 @@
-This code is intended to simulate collective escape of predatory threat by damselfish. These are obligate coral-dwelling fish and are prey to most species. Their primary escape strategy is to use spaces within the coral branching as refuge. They respond to conspecifics that share their coral head and this code is meant to model the escape cascades that are commonly exhibited by these species. Individuals respond to both personal information about threat but also to social information obtained from the escape of coral-mates.
+# Collective escape
 
-# Phase 1 (complete) — Model 1: Implementation of a simple collective escape model
+A research model of escape cascades in a synthetic fish school, inspired by
+Sosna et al. (2019). One fish starts escaping; other fish respond when evidence
+from their active neighbours exceeds an individual threshold. The current
+experiment tests how compressing the same school changes cascade propagation.
 
-Implement a school of fish with binary behavioral states, stochastic escape initiation, positive social feedback, fixed escape durations, and a refractory period after recovery.
+## Running the notebooks
 
-## 1. Organize the implementation
+Use a Python environment with NumPy, Matplotlib, and Jupyter. Open the notebooks
+from the project root and run their cells in order. Parameters, experiment
+setup, and plotting code stay visible in the notebooks; reusable functions live
+in the Python modules beside them.
 
-The Phase 1 code lives in [`P1_BasicIsingEscape/`](P1_BasicIsingEscape/):
+| Notebook | Purpose |
+| --- | --- |
+| [dose_memory.ipynb](dose_memory.ipynb) | Follow dose arrivals and finite memory with one sender and one receiver. |
+| [simulation.ipynb](simulation.ipynb) | Inspect one complete cascade, including evidence, escape times, and states. |
+| [baseline_calibration.ipynb](baseline_calibration.ipynb) | Calibrate the mean threshold to baseline recruitment on the synthetic school. |
+| [compression_experiment.ipynb](compression_experiment.ipynb) | Compare baseline and compressed schools over paired trials. |
 
-- [`agent.py`](P1_BasicIsingEscape/agent.py): define an ordinary `Agent` class with an `__init__` constructor. Store each agent's behavioral state in `state`, its remaining escape time in `escape_timer`, and its remaining refractory time in `refractory_timer`.
-- [`stimulus.py`](P1_BasicIsingEscape/stimulus.py): define a `square_wave` function that returns a stimulus of specified amplitude for a fixed duration, and zero amplitude outside this timeframe.
-- [`simulation.ipynb`](P1_BasicIsingEscape/simulation.ipynb): import these components, define parameters, initialize the school, allocate histories, run the simulation, and plot the states.
-- [`phase_diagram.ipynb`](P1_BasicIsingEscape/phase_diagram.ipynb): run parameter sweeps and plot phase diagrams.
+The calibrated threshold is entered explicitly in the simulation and compression
+notebooks. Recalibrating does not automatically change those parameter cells.
+The compression experiment creates `output/` and saves its figures and results there.
 
-Open either notebook and run its cells from top to bottom, using `P1_BasicIsingEscape/` as the notebook working directory so that its local imports resolve.
+## Project files
 
-## 2. Define states and parameters
+| File or folder | Contents |
+| --- | --- |
+| [network.py](network.py) | Synthetic spatial geometry, visibility, occlusion, and response weights. |
+| [agent.py](agent.py) | Each fish's threshold, evidence, state, and active timer. |
+| [dose.py](dose.py) | Stochastic dose arrivals and evidence accumulated over a finite memory window. |
+| [stimulus.py](stimulus.py) | Initial startle and stimulus helpers. |
+| [cascade.py](cascade.py) | Reusable cascade simulation returning the number of escaped fish. |
+| [output/](output/) | Generated PNG figures and NPZ simulation results. |
 
-For fish $i=1,\ldots,N$, let
+The notebooks and Python modules in the project root are the active implementation.
 
-```math
-x_i\in\{0,1\},
-```
+## How the cascade works
 
-where 0 means baseline and 1 means escaping. Store $x_i$ in `Agent.state`. Let $r_i$ be the nonnegative integer stored in `Agent.escape_timer` and $q_i$ the nonnegative integer stored in `Agent.refractory_timer`. The agent can then exhibit one of these behaviors:
+`adjacency[i, j]` is the directed sensory weight from sender `j` to receiver `i`.
+Positions and visibility determine which connections exist. Distance and apparent
+angular-size rank determine their weights through a logistic response function.
+The network stays fixed during each cascade.
 
-- Baseline: $x_i=0$, $r_i=0$, and $q_i=0$.
-- Escaping: $x_i=1$, $r_i>0$, and $q_i=0$.
-- Refractory: $x_i=0$, $r_i=0$, and $q_i>0$.
+At timestep zero, one fish is activated directly. Each other fish has a threshold
+drawn uniformly between zero and `2 * mean_threshold`, fixed throughout the run.
+The three states are unsheltered (`0`), actively escaping (`1`), and sheltered (`2`).
 
-Refractory fish are ones inside the coral head and cannot initiate an escape. They contribute zero social input.
+On each update, an active sender delivers a dose with probability
+`dose_rate * adjacency[i, j] * dt`. Each received packet contributes `dose_size`
+divided by the receiver's total number of positive incoming connections,
+including neighbours that are currently inactive. Evidence is the sum of doses
+within `memory_duration`.
 
-Define the following parameters in a notebook cell, using these default values:
+An unsheltered fish escapes when its evidence exceeds its threshold. It begins
+sending doses on the next update, remains active for `active_duration`, then
+enters absorbing shelter. Each fish escapes at most once. The run ends when no
+active fish remain, and cascade size includes the starter. External stimuli and
+fish movement are not part of the current cascade experiment.
 
-| Variable | Symbol | Value | Meaning |
-| --- | --- | --- | --- |
-| `n_fish` | $N$ | 20 | Number of fish |
-| `total_timesteps` | $L$ | 200 | Number of updates and recorded columns |
-| `random_seed` | — | 2026 | Simulation random seed |
-| `J` | $J$ | 1.0 | Social coupling strength |
-| `T` | $T$ | 0.1 | Noise temperature |
-| `threshold` | $\theta$ | 0.5 | Common activation threshold |
-| `escape_duration` | $d_E$ | 5 | Number of steps spent escaping |
-| `refractory_duration` | $d_R$ | 10 | Full steps blocked after recovery |
-| `stimulus_start` | $t_{\mathrm{start}}$ | 10 | First stimulus step |
-| `stimulus_strength` | $s_0$ | 1 | Pulse amplitude |
-| `n_exposed` | $n$ | 5 | Number of fish directly exposed to the pulse |
-| `stimulus_duration` | $d_s$ | 5 | Pulse duration |
+## Baseline and compression
 
-## 3. Initialize the simulation
+The current notebooks use these settings:
 
-Construct an array of $N$ agents, then set every agent's `state` to zero. Initialize their recovery and escape timers to zero so every fish is in the baseline state, outside the coral refuge and eligible for an escape.
+| Parameter | Value |
+| --- | --- |
+| `n_fish` | 40 |
+| `mean_threshold` | 0.005596, calibrated for this synthetic baseline |
+| `dt` | 0.001 s |
+| `active_duration` / `memory_duration` | 0.5 s / 2 s |
+| `dose_rate` / `dose_size` | 1000 per second / 0.001 |
+| `intercept` / `distance_coefficient` / `rank_coefficient` | 0.06449 / -3.20552 / -0.08016 |
+| `arena_size_cm` | (66.6, 66.6) |
+| `min_separation_cm` / `body_width_cm` | 3 / 2 |
+| `field_of_view_deg` / `occlusion` | 360 / True |
+| `network_seed` | 2026 |
+| `spatial_scales` | Baseline 1.0; compressed 0.7 |
 
-Randomly select `n_exposed` distinct fish that experience the external predatory stimulus. Let $e_i=1$ for selected fish and $e_i=0$ for all others. An `n_exposed` value of 0 gives a no-direct-exposure control; a value of $N$ exposes the whole school.
+`spatial_scale` multiplies each fish's displacement from the centroid. Keep
+`network_seed` and the other geometry settings fixed to contract the same school.
+The baseline median nearest-neighbour distance is approximately 6 cm; a scale of
+0.7 reduces it to approximately 4.2 cm. Visibility and weights are recalculated
+after scaling. Minimum separation is enforced during initial placement, before
+contraction.
 
-Evaluate the square-wave stimulus on a time array containing $t=0,\ldots,L-1$
+The calibrated threshold targets roughly 40% of baseline events producing at
+least one secondary escape, using a visual estimate from Sosna et al.'s SI
+Fig. S5A. Keep this threshold fixed when comparing spatial scales. A single
+simulation can still produce only one escape; rerunning the same seeds repeats
+the same event.
 
-```math
-s_t=
-\begin{cases}
- s_0,&t_{\mathrm{start}}\leq t\lt t_{\mathrm{start}}+d_s,\\
- 0,&\text{otherwise}.
-\end{cases}
-```
+The saved experiment contains 1,000 paired trials on one fixed school. Each pair
+shares thresholds, starter identity, and dose random seed across conditions.
 
-With the tabulated values, the stimulus is 1 at steps 10 through 14 and zero elsewhere. Apply the pulse only to the selected fish: fish $i$ receives direct input $e_i s_t$. Exposure changes activation probability; it does not force a fish to escape. Unexposed fish receive social input and retain baseline stochastic activation.
+| Outcome | Baseline | Compressed |
+| --- | ---: | ---: |
+| Mean cascade size, including starter | 1.897 | 5.226 |
+| Events with secondary escapes | 36.8% | 60.2% |
+| Median nearest-neighbour distance | 6.00 cm | 4.20 cm |
+| Mean visible-neighbour count | 23.98 | 19.90 |
 
-Allocate `state_history` as an $N\times L$ array of 8-bit integers. Rows represent fish and columns represent update steps.
+Saved outputs are the [school geometry](output/compression_geometry.png),
+[cascade distributions](output/compression_cascades.png), and
+[trial results](output/compression_results.npz). The NPZ stores cascade sizes
+(rows are trials, columns follow `spatial_scales`), trial IDs, spatial scales,
+mean threshold, and network seed. The notebook contains the remaining parameters
+and paired bootstrap intervals.
 
-## 4. Compute activity, field, and activation probability
+## Reproducing Sosna et al. 2019
 
-At each timestep, update all fish in a randomly determined order. The activity is the fraction of fish escaping:
+The current comparison demonstrates the qualitative mechanism: contraction
+increases propagation at fixed responsiveness, despite reducing the number of
+visible neighbours. It is not yet a quantitative reproduction of the empirical
+cascade distributions.
 
-```math
-a=\frac{1}{N}\sum_{i=1}^{N}x_i.
-```
+The geometry uses angular width and a simple occlusion approximation. Response
+coefficients come from the pooled first-exposure fit, while the implementation
+uses `log10(distance_cm)`; the paper's logarithm convention remains unverified.
+The threshold fits one recruitment statistic on one synthetic school.
 
-For a baseline fish at its update, compute the effective field
+Further comparisons should examine multiple school configurations and the full
+baseline and compressed cascade distributions, alongside the paper's visual
+network construction and response transformation.
 
-```math
-h_i=e_i s_t+Ja_i-\theta,
-```
-
-where $a_i$ is the activity immediately before that fish's update. The fish share the same activation parameters, but direct exposure differs between fish. Their fields also change within a step as earlier fish activate.
-
-Use 0/1 activity for the social term. Each escaping fish contributes $J/N$ to the field, while each baseline fish contributes zero. Thus, even one escaping fish provides positive social input when $J>0$; a majority is not required.
-
-Activate an eligible baseline fish with probability
-
-```math
-p_i=P(x_i:0\rightarrow1\mid h_i)
-=\frac{1}{1+\exp(-h_i/T)}.
-```
-
-If activated, set the fish's state to 1 and its recovery timer to $d_E$. Otherwise leave it at baseline with escape timer zero. Its refractory timer remains zero in either case. Do not make activation draws for escaping or refractory fish.
-
-For positive $T$, positive fields favor activation and negative fields suppress it. At zero field, the probability is $1/2$. Smaller $T$ makes the response sharper; as $T\rightarrow0^+$, it approaches a threshold at $h_i=0$. As $T\rightarrow\infty$, activation approaches probability $1/2$ regardless of the field.
-
-Finite noise allows spontaneous escapes. With no stimulus and no escaping neighbors, the supplied parameters give
-
-```math
-p_0=\frac{1}{1+\exp(\theta/T)}
-=\frac{1}{1+\exp(5)}\approx0.00669
-```
-
-per eligible baseline fish per step, or approximately 0.669%. Evaluate the exponential directly in the activation formula.
-
-## 5. Execute each update step in the specified order
-
-At the start of step $t$, save a Boolean mask named `already_escaping` that identifies agents whose state is 1, and a second mask named `already_refractory` that identifies agents with positive refractory timers. Exclude both groups when determining eligibility for escape.
-
-1. Count the fish in the saved `already_escaping` mask to initialize `active_count`.
-2. Obtain the indices of eligible baseline fish in ascending order, excluding both saved masks, then use random permutation to determine their visitation order.
-3. Before each visit, divide the current `active_count` by $N$. Multiply the current stimulus by the visited fish's exposure indicator, then use that direct input and activity to compute the field and logistic probability.
-4. Draw one uniform number. If the fish activates, change its `state` to 1, assign $d_E$ to its `escape_timer`, and immediately increment `active_count`. Later fish see this additional social input.
-5. After all activation attempts, visit the fish identified by the saved `already_refractory` mask and decrease each one's `refractory_timer` by one. A fish whose timer reaches zero becomes eligible on the next step.
-6. Separately visit the fish identified by the saved `already_escaping` mask. Decrease each one's `escape_timer` by one. If it reaches zero, set that fish's `state` to 0 and assign $d_R$ to its `refractory_timer`.
-7. Copy all agent states into history column $t$.
-
-Repeat for every step from 0 through $L-1$.
-
-Perform activation as a random sequential sweep within each discrete time step, then advance the saved groups' timers.
-
-### Mathematical form of the sweep
-
-Let $x_i^{(t)}$, $r_i^{(t)}$, and $q_i^{(t)}$ be the state, escape timer, and refractory timer before update $t$. Define the baseline, escaping, refractory sets:
-
-```math
-B_t=\{i:x_i^{(t)}=0,\ q_i^{(t)}=0\},\qquad
-E_t=\{i:x_i^{(t)}=1\},\qquad
-R_t=\{i:q_i^{(t)}\gt0\}
-
-```
-
-These sets partition the school under the state and timer above. For a random permutation $\pi_1,\ldots,\pi_{|B_t|}$ of the eligible baseline fish, start with $A_0=|E_t|$. At visit $k$, compute
-
-```math
-a_k=\frac{A_{k-1}}{N},\qquad
-h_k=e_{\pi_k}s_t+Ja_k-\theta,\qquad
-p_k=\frac{1}{1+\exp(-h_k/T)},
-```
-
-```math
-z_k=\mathbf{1}[u_k\lt p_k],\qquad A_k=A_{k-1}+z_k.
-```
-
-Here $\mathbf{1}[C]$ is 1 when condition $C$ is true and 0 otherwise. The complete state and timer updates are
-
-```math
-x_i^{(t+1)}=
-\begin{cases}
- z_k,&i=\pi_k\in B_t,\\
- \mathbf{1}[r_i^{(t)}\gt 1],&i\in E_t,\\
- 0,&i\in R_t.
-\end{cases}
-```
-
-```math
-r_i^{(t+1)}=
-\begin{cases}
- d_Ez_k,&i=\pi_k\in B_t,\\
- r_i^{(t)}-1,&i\in E_t,\\
- 0,&i\in R_t.
-\end{cases}
-```
-
-```math
-q_i^{(t+1)}=
-\begin{cases}
- q_i^{(t)}-1,&i\in R_t,\\
- d_R,&i\in E_t\text{ and }r_i^{(t)}=1,\\
- 0,&\text{otherwise}.
-\end{cases}
-```
-
-### Escape and refractory timing example
-
-With the default $d_E=5$ and $d_R=10$, a fish activated during step $t$ appears as escaping in recorded columns $t$ through $t+4$. It recovers at the end of step $t+5$, after contributing to that step's social field, and receives a refractory timer of 10. Block activation during the following 10 full steps, $t+6$ through $t+15$. Its timer reaches zero at the end of step $t+15$, so its next eligible activation step is $t+16$.
-
-In general, the next eligible step is $t+d_E+d_R+1$. Setting $d_R=0$ makes a recovered fish eligible on the step immediately after recovery, restoring the behavior without an additional refractory period. Use deterministic timer expiration for both phases. Further stimulus exposure must not extend either timer.
-
----
-
-# Phase 2: Active-state evidence integration
-
-P2 is being rebuilt incrementally, with short, readable notebook cells.
-
-**Current step: one spontaneous startle followed by a social escape cascade.**
-
-- [`agent.py`](P2_PulseCoupledEscape/agent.py) stores each fish's fixed threshold, evidence, state, and active-phase timer.
-- [`stimulus.py`](P2_PulseCoupledEscape/stimulus.py) provides `spontaneous_startle` to activate one initial fish, alongside reusable loom and square-wave functions.
-- [`network.py`](P2_PulseCoupledEscape/network.py) generates directed binary networks with a specified mean in-degree, at least one incoming link per fish, and a directed path between every pair of fish.
-- [`simulation.ipynb`](P2_PulseCoupledEscape/simulation.ipynb) defines parameters, starts one fish, runs the social cascade, and plots evidence, escape onsets, and behavioral states.
-- [`dose_memory.ipynb`](P2_PulseCoupledEscape/dose_memory.ipynb) explains dose arrivals and finite memory using the same functions in [`dose.py`](P2_PulseCoupledEscape/dose.py).
-
-The initial starter is chosen uniformly at random or selected with `initial_fish`.
-Only susceptible fish receive doses and update their evidence.
-Later escapes depend only on the sum of doses remembered within
-`memory_duration`. Each fish has a threshold drawn uniformly from zero to
-`2 * mean_threshold`, held fixed throughout the run. `mean_threshold = 0.10`
-is an exploratory setting for the connected binary random network, chosen
-to delay responses. It is not a fit to experimental cascade sizes.
-Active fish send doses for `active_duration`, then enter
-absorbing shelter. Each fish can escape at most once. Column zero records the
-initial state; subsequent columns record the simulation updates.
-The run stops after the first update with no active fish remaining. Histories
-and plots include that final state and end at the actual stopping time.
-
-Run `simulation.ipynb` from the top. The network uses the visible `n_fish`,
-`mean_in_degree`, and `network_seed` parameters. Every pair of fish
-has a directed path between them; escape thresholds still determine
-whether a cascade propagates along those paths.
-
-See the [P2 guide](P2_PulseCoupledEscape/README.md) for timing and the remaining
-differences from Sosna's model. The [previous P2 implementation and full
-specification](archive/README.md) are preserved as a reference snapshot.
-Phase 1 is unchanged.
+Reference: [Sosna et al. (2019)](https://pmc.ncbi.nlm.nih.gov/articles/PMC6789631/)
+and its supporting information.
